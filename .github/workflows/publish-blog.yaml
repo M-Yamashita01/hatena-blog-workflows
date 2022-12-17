@@ -1,0 +1,75 @@
+name: Publish hatena blog
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  publish-blog:
+    name: Publish blog
+    if: |
+      contains(github.head_ref, 'create-blog') &&
+        contains(github.event.pull_request.labels.*.name, 'approve release')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v3 
+      with:
+        go-version: 1.19
+
+    - name: Check out code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 2
+
+    - name: Get changed files in the entries folder
+      id: changed-files
+      uses: tj-actions/changed-files@v34
+      with:
+        files: |
+          entries/**
+
+    - name: Remove Date value from draft blog
+      uses: jacobtomlinson/gha-find-replace@v2
+      with:
+        find: 'Date: \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d'
+        replace: "Date:"
+        include: ${{ steps.changed-files.outputs.all_changed_files }}
+        regex: true
+
+    - name: Replace draft flag to false
+      uses: jacobtomlinson/gha-find-replace@v2
+      with:
+        find: "Draft: true"
+        replace: "Draft: false"
+        include: ${{ steps.changed-files.outputs.all_changed_files }}
+        regex: false
+
+    - name: Replace secrets key to secrets value
+      uses: jacobtomlinson/gha-find-replace@v2
+      with:
+        find: "$HATENA_API_KEY"
+        replace: "${{ secrets.HATENA_API_KEY }}"
+        include: blogsync.yaml
+        regex: false
+
+    - name: Setup blogsync
+      run: |
+        go install github.com/x-motemen/blogsync@v0.12.1
+
+    - name: Publish blog
+      run: |
+        ~/go/bin/blogsync push ${{ steps.changed-files.outputs.all_changed_files }}
+
+    - name: Replace original blog with pushed blog
+      run: |
+        latestBlogFilePath=`git ls-files --others --exclude-standard`
+        cat $latestBlogFilePath > ${{ steps.changed-files.outputs.all_changed_files }}
+        git mv -f ${{ steps.changed-files.outputs.all_changed_files }} $latestBlogFilePath
+
+    - name: Commit blog
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Reflects content pushed to Hatena blog
+        file_pattern: 'entries/**/*.md'
+        commit_author: github-actions[bot] <github-actions[bot]@users.noreply.github.com>

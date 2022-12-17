@@ -1,0 +1,5 @@
+m-yamashii.hatenablog.com:
+  username: xxxxx
+  password: $HATENA_API_KEY
+default:
+  local_root: entries

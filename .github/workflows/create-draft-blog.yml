@@ -1,0 +1,41 @@
+name: Create hatena draft blog
+
+on: create
+
+jobs:
+  create-blog:
+    name: Create draft blog
+    if: ${{ contains(github.ref, 'create-blog') }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+
+    - name: Check out code
+      uses: actions/checkout@v3
+
+    - name: Replace secrets key to secrets value
+      uses: jacobtomlinson/gha-find-replace@v2
+      with:
+        find: "$HATENA_API_KEY"
+        replace: "${{ secrets.HATENA_API_KEY }}"
+        include: blogsync.yaml
+        regex: false
+
+    - name: Setup blogsync
+      run: |
+        go install github.com/x-motemen/blogsync@v0.12.1
+
+    - name: Post hatena draft blog to hatena blog
+      run: |
+        ~/go/bin/blogsync post --draft m-yamashii.hatenablog.com < draft.md
+
+    - name: Commit draft blog
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Create draft blog.
+        file_pattern: 'entries/**/*.md'
+        commit_author: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+
